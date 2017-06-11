@@ -22,20 +22,32 @@
                 </Label>
                 <control:BindablePicker 
                     Title="Seleccione moneda origen..." 
-                    DisplayMemberPath="Code" 
-                    SelectedValuePath="TaxRate" 
+                    DisplayMemberPath="FullName" 
+                    SelectedValuePath="CodeRate" 
                     ItemsSource="{Binding Rates}" 
                     SelectedValue="{Binding Path=SourceRate, Mode=TwoWay}" 
                     HorizontalOptions="FillAndExpand" 
                     VerticalOptions="Center">
                 </control:BindablePicker>
-                <Label 
-                    Text="Modena destino:">
-                </Label>
+                <StackLayout
+                    Orientation="Horizontal">
+                    <Label
+                        VerticalOptions="Center"
+                        HorizontalOptions="StartAndExpand"
+                        Text="Modena destino:">
+                    </Label>
+                    <Image
+                        HorizontalOptions="End"
+                        Source="change.png">
+                        <Image.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding ChangeCommand}"/>
+                        </Image.GestureRecognizers>
+                    </Image>
+                </StackLayout>
                 <control:BindablePicker 
                     Title="Seleccione moneda destino..." 
-                    DisplayMemberPath="Code" 
-                    SelectedValuePath="TaxRate" 
+                    DisplayMemberPath="FullName" 
+                    SelectedValuePath="CodeRate" 
                     ItemsSource="{Binding Rates}" 
                     SelectedValue="{Binding Path=TargetRate, Mode=TwoWay}" 
                     HorizontalOptions="FillAndExpand" 

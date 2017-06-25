@@ -70,11 +70,17 @@
                     BackgroundColor="Silver" 
                     TextColor="Purple" 
                     FontAttributes="Bold"
-                    FontSize="Medium"
+                    FontSize="Large"
                     HorizontalTextAlignment="Center" 
                     VerticalTextAlignment="Center" 
                     HorizontalOptions="FillAndExpand" 
                     VerticalOptions="FillAndExpand">
+                </Label>
+                <Label
+                    TextColor="Black"
+                    HorizontalOptions="Center"
+                    VerticalOptions="End"
+                    Text="{Binding Status, Mode=TwoWay}">
                 </Label>
             </StackLayout>
         </ScrollView>

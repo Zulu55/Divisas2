@@ -1,16 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Reflection;
-using System.Windows.Input;
-using Divisas2.Models;
-using Divisas2.Services;
-using GalaSoft.MvvmLight.Command;
-using System.Linq;
-
-namespace Divisas2.ViewModels
+﻿namespace Divisas2.ViewModels
 {
+    using System;
+	using System.Collections.Generic;
+	using System.Collections.ObjectModel;
+	using System.ComponentModel;
+	using System.Reflection;
+	using System.Windows.Input;
+	using Divisas2.Models;
+	using Divisas2.Services;
+	using GalaSoft.MvvmLight.Command;
+	using System.Linq;
+    using System.Threading.Tasks;
+
     public class MainViewModel : INotifyPropertyChanged
     {
         #region Events
@@ -18,14 +19,18 @@ namespace Divisas2.ViewModels
         #endregion
 
         #region Attributes
-        private ApiService ApiService;
-        private bool isRunning;
-        private bool isEnabled;
-        private string message;
-        private string sourceRate;
-        private string targetRate;
-		private ExchangeRates exchangeRates;
-		private ExchangeNames exchangeNames;
+        ApiService apiService;
+        DialogService dialogService;
+        DataService dataService;
+        bool isRunning;
+        bool isEnabled;
+        string message;
+        string sourceRate;
+        string targetRate;
+        string status;
+		ExchangeRates exchangeRates;
+		ExchangeNames exchangeNames;
+        List<Rate> rates;
 		#endregion
 
 		#region Properties
@@ -83,6 +88,22 @@ namespace Divisas2.ViewModels
 			}
 		}
 
+		public string Status
+		{
+			set
+			{
+				if (status != value)
+				{
+					status = value;
+					PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Status"));
+				}
+			}
+			get
+			{
+				return status;
+			}
+		}
+
 		public decimal Amount
         {
             get;
@@ -126,7 +147,11 @@ namespace Divisas2.ViewModels
         #region Constructors
         public MainViewModel()
         {
-            ApiService = new ApiService();
+            Status = "Cargando tasas...";
+
+            apiService = new ApiService();
+            dialogService = new DialogService();
+            dataService = new DataService();
 
             Rates = new ObservableCollection<Rate>();
 
@@ -135,35 +160,79 @@ namespace Divisas2.ViewModels
         #endregion
 
         #region Methods
-        private async void GetRates()
+        async void GetRates()
         {
 			IsRunning = true;
 			IsEnabled = false;
 
-			var response1 = await ApiService.Get<ExchangeRates>(
+			var checkConnetion = await apiService.CheckConnection();
+			if (checkConnetion.IsSuccess)
+			{
+                await GetRatesFromAPI();
+                SaveRates();
+			}
+            else
+            {
+                GetRatesFromData();
+				Status = "Tasas cargadas localmente.";
+			}
+
+			var lastQuery = dataService.First<LastQuery>(false);
+			if (lastQuery != null)
+			{
+				SourceRate = lastQuery.CodeRateSource;
+				TargetRate = lastQuery.CodeRateTarget;
+			}
+			
+            IsRunning = false;
+			IsEnabled = true;
+		}
+
+        void SaveRates()
+        {
+            dataService.DeleteAll<Rate>();      
+            dataService.Save(rates);
+        }
+
+        void GetRatesFromData()
+        {
+            rates = dataService.Get<Rate>(false);
+			Rates.Clear();
+			foreach (var rate in rates)
+			{
+				Rates.Add(new Rate
+				{
+					Code = rate.Code,
+					Name = rate.Name,
+					TaxRate = rate.TaxRate,
+				});
+			}
+		}
+
+        async Task GetRatesFromAPI()
+        {
+			var response1 = await apiService.Get<ExchangeRates>(
 				"https://openexchangerates.org",
 				"/api/latest.json?app_id=f490efbcd52d48ee98fd62cf33c47b9e");
 
-            var response2 = await ApiService.Get<ExchangeNames>(
+			var response2 = await apiService.Get<ExchangeNames>(
 				"https://gist.githubusercontent.com",
 				"/picodotdev/88512f73b61bc11a2da4/raw/9407514be22a2f1d569e75d6b5a58bd5f0ebbad8");
 
-			IsRunning = false;
-			IsEnabled = true;
-			
-            if (!response1.IsSuccess || !response2.IsSuccess)
-            {
-				await App.Current.MainPage.DisplayAlert("Error", "Something went wrong", "Acept");
-				return;
+			if (response1.IsSuccess && response2.IsSuccess)
+			{
+				exchangeRates = (ExchangeRates)response1.Result;
+				exchangeNames = (ExchangeNames)response2.Result;
+				LoadRates();
+				Status = "Tasas cargadas de internet.";
 			}
-
-			exchangeRates = (ExchangeRates)response1.Result;
-            exchangeNames = (ExchangeNames)response2.Result;
-
-			LoadRates();
+            else
+            {
+				Status = "Ocurrio un problema cargando las tasas, por favor intente más tarde.";
+			}
         }
 
-        private void LoadRates()
+        void LoadRates()
         {
             // Get values
 			var rateValues = new List<RateValue>();
@@ -201,6 +270,7 @@ namespace Divisas2.ViewModels
                        select new { v, n }).ToList();
 
             Rates.Clear();
+            rates = new List<Rate>();
             foreach (var item in qry)
 			{
                 Rates.Add(new Rate 
@@ -209,6 +279,13 @@ namespace Divisas2.ViewModels
                     Name = item.n.Name,
                     TaxRate = item.v.TaxRate,
                 });
+
+				rates.Add(new Rate
+				{
+					Code = item.v.Code,
+					Name = item.n.Name,
+					TaxRate = item.v.TaxRate,
+				});
 			}
         }
         #endregion
@@ -265,7 +342,20 @@ namespace Divisas2.ViewModels
                                       Convert.ToDecimal(SourceRate.Substring(3)) *
                                       Convert.ToDecimal(TargetRate.Substring(3));
 
-			Message = string.Format("{0:N2} = {1:N2}", Amount, amountConverted);
+            Message = string.Format("{0} {1:N2} = {2} {3:N2}", 
+                                    SourceRate.Substring(0, 3),
+                                    Amount,
+									TargetRate.Substring(0, 3),
+									amountConverted);
+
+            var lastQuery = new LastQuery
+            {
+                CodeRateSource = SourceRate,
+                CodeRateTarget = TargetRate,
+            };
+
+            dataService.DeleteAll<LastQuery>();
+            dataService.Insert(lastQuery);
 		}
 		#endregion
 	}

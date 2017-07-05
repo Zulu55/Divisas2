@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" 
     xmlns:control="clr-namespace:Divisas2.Controls" 
     x:Class="Divisas2.Views.MainPage" 
+    Icon="ic_launcher.png"
     Title="Divisas" 
     BindingContext="{Binding Main, Source={StaticResource Locator}}">
 	<ContentPage.Content>
